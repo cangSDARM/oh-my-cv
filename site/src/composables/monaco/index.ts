@@ -1,6 +1,11 @@
 import { isClient } from "@renovamen/utils";
 import type * as Monaco from "monaco-editor";
-import { setupMonacoModel, setupMonacoEditor, type MonacoModel } from "./setup";
+import {
+  setupMonacoModel,
+  setupMonacoEditor,
+  setupMonacoFileDrop,
+  type MonacoModel
+} from "./setup";
 
 type MonacoStates = {
   editor: Monaco.editor.IStandaloneCodeEditor;
@@ -33,6 +38,8 @@ export const useMonaco = () => {
       const css = await setupMonacoModel("css", data.css, () =>
         setData("css", css.get().getValue())
       );
+
+      setupMonacoFileDrop(container, editor, markdown.get());
 
       states.value = { editor, markdown, css };
     } catch (error) {

@@ -111,3 +111,45 @@ export const setupMonacoTheme = async (monaco: typeof Monaco) => {
   setTheme(colorMode.value);
   watch(() => colorMode.value, setTheme);
 };
+
+export const setupMonacoFileDrop = async (
+  container: HTMLElement,
+  editor: Monaco.editor.IStandaloneCodeEditor,
+  model: Monaco.editor.ITextModel
+) => {
+  const { monaco } = await setupMonaco();
+
+  function fileSelect(evt: DragEvent) {
+    evt.stopPropagation();
+    evt.preventDefault();
+
+    const file = evt.dataTransfer?.files?.[0];
+    if (!file?.type.match("image.*")) {
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.readAsDataURL(file);
+    reader.addEventListener("load", ({ target }) => {
+      // TODO: proper way render image
+      console.log(target?.result);
+
+      const insertText = "![" + file.name + "]";
+      const curSelection = editor.getSelection();
+
+      if (!curSelection) return;
+      const { startLineNumber, startColumn, endLineNumber, endColumn } = curSelection;
+      editor.executeEdits("", [
+        {
+          range: new monaco.Range(startLineNumber, startColumn, endLineNumber, endColumn),
+          text: insertText,
+          forceMoveMarkers: true
+        }
+      ]);
+    });
+  }
+
+  // container.addEventListener("dragover", dragOver, false);
+  container.addEventListener("drop", fileSelect, false);
+};
