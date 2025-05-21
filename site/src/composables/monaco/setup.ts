@@ -61,11 +61,8 @@ export const setupMonacoModel = async (
 ): Promise<MonacoModel> => {
   const { monaco } = await setupMonaco();
 
-  const disposables: Monaco.IDisposable[] = [];
   const model = monaco.editor.createModel(content, language);
-
-  disposables.push(model);
-  disposables.push(model.onDidChangeContent(onChange));
+  const disposables: Monaco.IDisposable[] = [model, model.onDidChangeContent(onChange)];
 
   return {
     get: () => model,
@@ -114,42 +111,57 @@ export const setupMonacoTheme = async (monaco: typeof Monaco) => {
 
 export const setupMonacoFileDrop = async (
   container: HTMLElement,
-  editor: Monaco.editor.IStandaloneCodeEditor,
-  model: Monaco.editor.ITextModel
+  editor: Monaco.editor.IStandaloneCodeEditor
 ) => {
   const { monaco } = await setupMonaco();
+  const fileUris: string[] = [];
 
-  function fileSelect(evt: DragEvent) {
-    evt.stopPropagation();
-    evt.preventDefault();
+  return (
+    model: MonacoModel,
+    transformIntoMd: (fileName: string, uri: string) => string
+  ) => {
+    const modelId = model.get().id;
 
-    const file = evt.dataTransfer?.files?.[0];
-    if (!file?.type.match("image.*")) {
-      return;
-    }
+    let disposed = false;
+    model.get().onWillDispose(() => {
+      disposed = true;
+    });
 
-    const reader = new FileReader();
+    function displayLocalImage(evt: DragEvent) {
+      if (disposed) return;
+      if (editor?.getModel()?.id !== modelId) return;
 
-    reader.readAsDataURL(file);
-    reader.addEventListener("load", ({ target }) => {
-      // TODO: proper way render image
-      console.log(target?.result);
+      evt.stopPropagation();
+      evt.preventDefault();
 
-      const insertText = "![" + file.name + "]";
+      const file = evt.dataTransfer?.files?.[0];
+      if (!file?.type.match("image.*")) {
+        return;
+      }
+
+      const uri = window.URL.createObjectURL(file);
+      fileUris.push(uri);
+      const insertText = transformIntoMd(file.name, uri);
       const curSelection = editor.getSelection();
 
       if (!curSelection) return;
       const { startLineNumber, startColumn, endLineNumber, endColumn } = curSelection;
-      editor.executeEdits("", [
+      editor.executeEdits("move cursor after inserted local image", [
         {
           range: new monaco.Range(startLineNumber, startColumn, endLineNumber, endColumn),
           text: insertText,
           forceMoveMarkers: true
         }
       ]);
-    });
-  }
+    }
 
-  // container.addEventListener("dragover", dragOver, false);
-  container.addEventListener("drop", fileSelect, false);
+    const dispose = () => {
+      disposed = true;
+      fileUris.forEach((uri) => window.URL.revokeObjectURL(uri));
+      container?.removeEventListener("drop", displayLocalImage);
+    };
+    container.addEventListener("drop", displayLocalImage, false);
+
+    return dispose;
+  };
 };
